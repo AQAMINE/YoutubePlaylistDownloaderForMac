@@ -15,10 +15,12 @@ SURFACE = "#FFFFFF"
 HOVER = "#F8FAFC"
 TEXT = "#0F172A"
 PRIMARY_HOVER = "#0F766E"
+PRIMARY_ACTIVE = "#115E59"
 PRIMARY_DISABLED = "#99D5CF"
 DANGER_BG = "#FFF1F2"
 DANGER_BORDER = "#FECDD3"
 DANGER_HOVER = "#FFE4E6"
+DANGER_ACTIVE = "#FCA5A5"
 CARD_BG = "#FFFFFF"
 
 
@@ -91,7 +93,7 @@ def _parent_bg(master) -> str:
 
 # ── Modern Button ────────────────────────────────────────────────────────────
 class ModernButton(tk.Canvas):
-    """Soft rounded button with icon, text, hover, and press states."""
+    """Soft rounded button with icon, text, hover, active tactile press, and hand cursor."""
 
     def __init__(
         self,
@@ -107,7 +109,9 @@ class ModernButton(tk.Canvas):
         **kwargs,
     ):
         parent_bg = kwargs.pop("bg", None) or _parent_bg(master)
-        super().__init__(master, highlightthickness=0, bd=0, bg=parent_bg, **kwargs)
+        super().__init__(
+            master, highlightthickness=0, bd=0, bg=parent_bg, cursor="hand2", **kwargs
+        )
         self.command = command
         self.variant = variant
         self._enabled = True
@@ -118,11 +122,14 @@ class ModernButton(tk.Canvas):
         self._radius = radius
         self._parent_bg = parent_bg
         self._hover = False
+        self._pressed = False
         self._bg_image: tk.PhotoImage | None = None
 
-        self.content = tk.Frame(self, bg=self._palette()["bg"])
+        self.content = tk.Frame(self, bg=self._palette()["bg"], cursor="hand2")
         if icon is not None:
-            self.icon_lbl = tk.Label(self.content, image=icon, bg=self._palette()["bg"], bd=0)
+            self.icon_lbl = tk.Label(
+                self.content, image=icon, bg=self._palette()["bg"], bd=0, cursor="hand2"
+            )
             self.icon_lbl.pack(side=tk.LEFT, padx=(0, 6))
         else:
             self.icon_lbl = None
@@ -132,8 +139,9 @@ class ModernButton(tk.Canvas):
             text=text,
             bg=self._palette()["bg"],
             fg=self._palette()["fg"],
-            font=("Helvetica Neue", 12, "bold" if variant == "primary" else "normal"),
+            font=("Helvetica Neue", 12, "bold" if variant == "primary" else "bold"),
             bd=0,
+            cursor="hand2",
         )
         self.text_lbl.pack(side=tk.LEFT)
 
@@ -149,28 +157,40 @@ class ModernButton(tk.Canvas):
     def _bind_events(self, widget: tk.Misc) -> None:
         widget.bind("<Enter>", self._on_enter)
         widget.bind("<Leave>", self._on_leave)
-        widget.bind("<Button-1>", self._on_click)
+        widget.bind("<ButtonPress-1>", self._on_press)
+        widget.bind("<ButtonRelease-1>", self._on_release)
 
     def _palette(self) -> dict[str, str]:
         disabled = not self._enabled
         hover = self._hover and self._enabled
+        pressed = self._pressed and self._enabled
+
         if self.variant == "primary":
             if disabled:
                 return {"bg": PRIMARY_DISABLED, "fg": "#ECFEFF", "border": PRIMARY_DISABLED}
+            if pressed:
+                return {"bg": PRIMARY_ACTIVE, "fg": "#FFFFFF", "border": PRIMARY_ACTIVE}
             if hover:
                 return {"bg": PRIMARY_HOVER, "fg": "#FFFFFF", "border": PRIMARY_HOVER}
             return {"bg": ACCENT, "fg": "#FFFFFF", "border": ACCENT}
+
         if self.variant == "danger":
             if disabled:
                 return {"bg": SURFACE, "fg": "#FCA5A5", "border": "#FECACA"}
+            if pressed:
+                return {"bg": DANGER_ACTIVE, "fg": "#FFFFFF", "border": DANGER_ACTIVE}
             if hover:
                 return {"bg": DANGER_HOVER, "fg": DANGER, "border": DANGER_BORDER}
             return {"bg": DANGER_BG, "fg": DANGER, "border": DANGER_BORDER}
+
+        # Ghost / Secondary Variant
         if disabled:
             return {"bg": "#F8FAFC", "fg": "#94A3B8", "border": BORDER}
+        if pressed:
+            return {"bg": "#E2E8F0", "fg": TEXT, "border": "#94A3B8"}
         if hover:
             return {"bg": "#F1F5F9", "fg": TEXT, "border": "#CBD5E1"}
-        return {"bg": SURFACE, "fg": TEXT, "border": BORDER}
+        return {"bg": SURFACE, "fg": "#1E293B", "border": BORDER}
 
     def _fit(self) -> None:
         self.content.update_idletasks()
@@ -190,8 +210,12 @@ class ModernButton(tk.Canvas):
         self.delete("bg")
         self.create_image(0, 0, image=self._bg_image, anchor="nw", tags="bg")
         self.tag_lower("bg")
-        self.coords(self._window, w / 2, h / 2)
+
+        # Slight tactile shift down on press
+        offset = 1 if self._pressed else 0
+        self.coords(self._window, w / 2, h / 2 + offset)
         self.itemconfigure(self._window, width=w - 4, height=h - 4)
+
         for widget in (self.content, self.text_lbl):
             widget.configure(bg=colors["bg"])
         self.text_lbl.configure(fg=colors["fg"])
@@ -210,11 +234,20 @@ class ModernButton(tk.Canvas):
         if widget is not None and str(widget).startswith(str(self)):
             return
         self._hover = False
+        self._pressed = False
         self._redraw()
 
-    def _on_click(self, _e=None) -> None:
-        if self._enabled and self.command:
-            self.command()
+    def _on_press(self, _e=None) -> None:
+        if self._enabled:
+            self._pressed = True
+            self._redraw()
+
+    def _on_release(self, _e=None) -> None:
+        if self._enabled and self._pressed:
+            self._pressed = False
+            self._redraw()
+            if self.command:
+                self.command()
 
     def configure(self, cnf=None, **kwargs):  # noqa: A003
         if cnf:
@@ -223,6 +256,13 @@ class ModernButton(tk.Canvas):
             state = kwargs.pop("state")
             self._enabled = state not in (tk.DISABLED, "disabled")
             self._hover = False
+            self._pressed = False
+            cursor = "hand2" if self._enabled else "arrow"
+            self.configure(cursor=cursor)
+            self.content.configure(cursor=cursor)
+            self.text_lbl.configure(cursor=cursor)
+            if self.icon_lbl is not None:
+                self.icon_lbl.configure(cursor=cursor)
             self._redraw()
         if "text" in kwargs:
             self._text = kwargs.pop("text")
@@ -256,7 +296,9 @@ class ModernSelect(tk.Canvas):
         **kwargs,
     ):
         parent_bg = kwargs.pop("bg", None) or _parent_bg(master)
-        super().__init__(master, highlightthickness=0, bd=0, bg=parent_bg, **kwargs)
+        super().__init__(
+            master, highlightthickness=0, bd=0, bg=parent_bg, cursor="hand2", **kwargs
+        )
         self.values = list(values)
         self.variable = variable or tk.StringVar(value=self.values[0] if self.values else "")
         self.command = command
@@ -274,10 +316,10 @@ class ModernSelect(tk.Canvas):
         self._chevron = photo("chevron", 12, MUTED, master=root)
         self._check = photo("check", 14, ACCENT, master=root)
 
-        self.inner = tk.Frame(self, bg=SURFACE)
+        self.inner = tk.Frame(self, bg=SURFACE, cursor="hand2")
 
         if icon is not None:
-            self.leading_lbl = tk.Label(self.inner, image=icon, bg=SURFACE, bd=0)
+            self.leading_lbl = tk.Label(self.inner, image=icon, bg=SURFACE, bd=0, cursor="hand2")
             self.leading_lbl.pack(side=tk.LEFT, padx=(10, 6), pady=6)
         else:
             self.leading_lbl = None
@@ -287,13 +329,14 @@ class ModernSelect(tk.Canvas):
             textvariable=self.variable,
             bg=SURFACE,
             fg=TEXT,
-            font=("Helvetica Neue", 12),
+            font=("Helvetica Neue", 12, "bold"),
             anchor="w",
             bd=0,
+            cursor="hand2",
         )
         self.value_lbl.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(2, 6), pady=6)
 
-        self.chevron_lbl = tk.Label(self.inner, image=self._chevron, bg=SURFACE, bd=0)
+        self.chevron_lbl = tk.Label(self.inner, image=self._chevron, bg=SURFACE, bd=0, cursor="hand2")
         self.chevron_lbl.pack(side=tk.RIGHT, padx=(4, 10), pady=6)
 
         self._window = self.create_window(0, 0, window=self.inner, anchor="center")
@@ -311,7 +354,6 @@ class ModernSelect(tk.Canvas):
 
     def _fit(self) -> None:
         self.inner.update_idletasks()
-        # Compute proper width ensuring left icon & right chevron have breathing room
         req_w = self.inner.winfo_reqwidth() + 16
         min_w = self._min_char_width * 11 + (32 if self._leading_icon else 0) + 36
         w = max(req_w, min_w)
@@ -339,7 +381,6 @@ class ModernSelect(tk.Canvas):
         self.create_image(0, 0, image=self._bg_image, anchor="nw", tags="bg")
         self.tag_lower("bg")
 
-        # Fit inner window perfectly without cropping icons
         self.coords(self._window, w / 2, h / 2)
         self.itemconfigure(self._window, width=w - 4, height=h - 4)
 
@@ -423,7 +464,7 @@ class ModernSelect(tk.Canvas):
             row.pack(fill=tk.X, pady=1, padx=2)
 
             if self._leading_icon is not None:
-                ic = tk.Label(row, image=self._leading_icon, bg=row["bg"], bd=0)
+                ic = tk.Label(row, image=self._leading_icon, bg=row["bg"], bd=0, cursor="hand2")
                 ic.pack(side=tk.LEFT, padx=(10, 8), pady=6)
             else:
                 ic = None
@@ -436,6 +477,7 @@ class ModernSelect(tk.Canvas):
                 font=("Helvetica Neue", 12, "bold" if selected else "normal"),
                 anchor="w",
                 bd=0,
+                cursor="hand2",
             )
             lbl.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(4 if self._leading_icon else 10, 4), pady=6)
 
@@ -444,6 +486,7 @@ class ModernSelect(tk.Canvas):
                 image=self._check if selected else "",
                 bg=row["bg"],
                 bd=0,
+                cursor="hand2",
             )
             mark.pack(side=tk.RIGHT, padx=(6, 10), pady=6)
 
@@ -506,6 +549,13 @@ class ModernSelect(tk.Canvas):
             self._enabled = state not in (tk.DISABLED, "disabled")
             if not self._enabled:
                 self._close()
+            cursor = "hand2" if self._enabled else "arrow"
+            self.configure(cursor=cursor)
+            self.inner.configure(cursor=cursor)
+            self.value_lbl.configure(cursor=cursor)
+            self.chevron_lbl.configure(cursor=cursor)
+            if self.leading_lbl is not None:
+                self.leading_lbl.configure(cursor=cursor)
             self._redraw()
         if "values" in kwargs:
             self.values = list(kwargs.pop("values"))
@@ -524,7 +574,7 @@ class ModernSelect(tk.Canvas):
 
 # ── Modern Entry ─────────────────────────────────────────────────────────────
 class ModernEntry(tk.Canvas):
-    """Rounded input field with optional focus glow and clear button."""
+    """Rounded input field with focus glow and optional clear button."""
 
     def __init__(
         self,
@@ -671,7 +721,7 @@ class ModernEntry(tk.Canvas):
 
 # ── Modern Checkbox / Switch ──────────────────────────────────────────────────
 class ModernCheckbutton(tk.Canvas):
-    """Custom rounded checkbox component to replace native OS checkbuttons."""
+    """Pill-styled hover checkbox component with rounded box & sharp checkmark."""
 
     def __init__(
         self,
@@ -684,7 +734,9 @@ class ModernCheckbutton(tk.Canvas):
         **kwargs,
     ):
         parent_bg = kwargs.pop("bg", None) or _parent_bg(master)
-        super().__init__(master, highlightthickness=0, bd=0, bg=parent_bg, **kwargs)
+        super().__init__(
+            master, highlightthickness=0, bd=0, bg=parent_bg, cursor="hand2", **kwargs
+        )
         self.text = text
         self.variable = variable or tk.BooleanVar(value=False)
         self.command = command
@@ -696,15 +748,17 @@ class ModernCheckbutton(tk.Canvas):
         root = self.winfo_toplevel()
         self._check_icon = photo("check", 12, "#FFFFFF", master=root)
 
-        self.inner = tk.Frame(self, bg=parent_bg, cursor="hand2")
-        self.box = tk.Canvas(self.inner, width=20, height=20, highlightthickness=0, bd=0, bg=parent_bg)
-        self.box.pack(side=tk.LEFT, padx=(2, 8), pady=2)
+        self.inner = tk.Frame(self, bg=parent_bg, cursor="hand2", padx=6, pady=4)
+        self.box = tk.Canvas(
+            self.inner, width=20, height=20, highlightthickness=0, bd=0, bg=parent_bg, cursor="hand2"
+        )
+        self.box.pack(side=tk.LEFT, padx=(0, 8))
 
         self.label = tk.Label(
             self.inner,
             text=text,
             bg=parent_bg,
-            fg=TEXT,
+            fg="#1E293B",
             font=("Helvetica Neue", 12),
             bd=0,
             cursor="hand2",
@@ -724,16 +778,22 @@ class ModernCheckbutton(tk.Canvas):
 
     def _fit(self) -> None:
         self.inner.update_idletasks()
-        w = self.inner.winfo_reqwidth() + 10
-        h = max(28, self.inner.winfo_reqheight() + 4)
+        w = self.inner.winfo_reqwidth() + 12
+        h = max(32, self.inner.winfo_reqheight() + 4)
         self.configure(width=w, height=h)
         self._redraw()
 
     def _redraw(self, _e=None) -> None:
         self.update_idletasks()
         checked = self.variable.get()
+        bg_color = "#F1F5F9" if self._hover else self.parent_bg
+
+        self.inner.configure(bg=bg_color)
+        self.box.configure(bg=bg_color)
+        self.label.configure(bg=bg_color)
+
         fill = ACCENT if checked else SURFACE
-        border = ACCENT if checked else ("#94A3B8" if self._hover else BORDER)
+        border = ACCENT if checked else ("#0D9488" if self._hover else "#CBD5E1")
 
         self._box_image = round_photo(self.box, 20, 20, self.radius, fill, border, outline_width=1)
         self.box.delete("all")
@@ -741,9 +801,8 @@ class ModernCheckbutton(tk.Canvas):
         if checked:
             self.box.create_image(10, 10, image=self._check_icon, anchor="center")
 
-        w = max(self.winfo_width(), self.inner.winfo_reqwidth())
-        h = max(self.winfo_height(), 28)
-        self.coords(self._window, 4, h / 2)
+        h = max(self.winfo_height(), 32)
+        self.coords(self._window, 2, h / 2)
 
     def _toggle(self, _e=None) -> None:
         self.variable.set(not self.variable.get())
