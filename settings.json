@@ -1,0 +1,12 @@
+{
+  "save_path": "/Users/amineaqeblip/Downloads/YouTubeDownloads",
+  "audio_only": false,
+  "audio_format": "mp3",
+  "video_format": "mp4",
+  "quality": "1080",
+  "skip_existing": true,
+  "playlist_subdir": true,
+  "subset_enabled": false,
+  "subset_start": 1,
+  "subset_end": 0
+}
