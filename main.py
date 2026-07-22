@@ -217,15 +217,32 @@ class App(tk.Tk):
             thickness=10,
         )
 
-    def _section_header(self, parent: tk.Misc, icon: str, title: str) -> ttk.Frame:
-        row = ttk.Frame(parent, style="Card.TFrame")
-        ttk.Label(row, image=self._icons[icon], style="Card.TLabel").pack(side=tk.LEFT, padx=(0, 6))
-        ttk.Label(
+    def _card(self, parent: tk.Misc, *, pady: tuple[int, int] = (0, 8)) -> tk.Frame:
+        """White card with a continuous border (no LabelFrame top gap)."""
+        shell = tk.Frame(
+            parent,
+            bg=BORDER,
+            highlightthickness=0,
+            bd=0,
+        )
+        shell.pack(fill=tk.BOTH, expand=False, pady=pady)
+        # 1px border via outer shell color + inner white panel
+        inner = tk.Frame(shell, bg=SURFACE, highlightthickness=0, bd=0)
+        inner.pack(fill=tk.BOTH, expand=True, padx=1, pady=1)
+        content = tk.Frame(inner, bg=SURFACE, highlightthickness=0, bd=0)
+        content.pack(fill=tk.BOTH, expand=True, padx=12, pady=12)
+        return content
+
+    def _section_header(self, parent: tk.Misc, icon: str, title: str) -> tk.Frame:
+        row = tk.Frame(parent, bg=SURFACE)
+        tk.Label(row, image=self._icons[icon], bg=SURFACE, bd=0).pack(side=tk.LEFT, padx=(0, 6))
+        tk.Label(
             row,
             text=title,
-            style="Card.TLabel",
+            bg=SURFACE,
+            fg=MUTED,
             font=("Helvetica Neue", 11, "bold"),
-            foreground=MUTED,
+            bd=0,
         ).pack(side=tk.LEFT)
         return row
 
@@ -245,11 +262,10 @@ class App(tk.Tk):
             style="Subtitle.TLabel",
         ).pack(anchor=tk.W, pady=(2, 0))
 
-        url_card = ttk.LabelFrame(outer, text="", padding=12)
-        url_card.pack(fill=tk.X, pady=(0, 8))
+        url_card = self._card(outer)
         self._section_header(url_card, "link", "SOURCE").pack(anchor=tk.W, pady=(0, 8))
 
-        url_row = ttk.Frame(url_card, style="Card.TFrame")
+        url_row = tk.Frame(url_card, bg=SURFACE)
         url_row.pack(fill=tk.X)
         self.url_var = tk.StringVar()
         self.url_entry = ModernEntry(
@@ -267,22 +283,38 @@ class App(tk.Tk):
         )
         self.fetch_btn.pack(side=tk.LEFT)
 
-        self.info_title = ttk.Label(
-            url_card, text="Waiting for a URL…", style="Status.TLabel", wraplength=740
+        self.info_title = tk.Label(
+            url_card,
+            text="Waiting for a URL…",
+            bg=SURFACE,
+            fg=TEXT,
+            font=("Helvetica Neue", 12),
+            anchor="w",
+            justify="left",
+            wraplength=740,
         )
         self.info_title.pack(anchor=tk.W, pady=(8, 0))
-        self.info_meta = ttk.Label(url_card, text="", style="CardMuted.TLabel")
+        self.info_meta = tk.Label(
+            url_card,
+            text="",
+            bg=SURFACE,
+            fg=MUTED,
+            font=("Helvetica Neue", 11),
+            anchor="w",
+            justify="left",
+        )
         self.info_meta.pack(anchor=tk.W, pady=(2, 0))
 
-        settings = ttk.LabelFrame(outer, text="", padding=12)
-        settings.pack(fill=tk.X, pady=(0, 8))
+        settings = self._card(outer)
         self._section_header(settings, "sliders", "DOWNLOAD SETTINGS").pack(
             anchor=tk.W, pady=(0, 8)
         )
 
-        path_row = ttk.Frame(settings, style="Card.TFrame")
+        path_row = tk.Frame(settings, bg=SURFACE)
         path_row.pack(fill=tk.X, pady=(0, 6))
-        ttk.Label(path_row, text="Save to", style="CardMuted.TLabel").pack(side=tk.LEFT)
+        tk.Label(path_row, text="Save to", bg=SURFACE, fg=MUTED, font=("Helvetica Neue", 11)).pack(
+            side=tk.LEFT
+        )
         self.save_var = tk.StringVar(value=self.settings["save_path"])
         self.save_entry = ModernEntry(
             path_row, textvariable=self.save_var, font=("Helvetica Neue", 12), bg=SURFACE
@@ -298,7 +330,7 @@ class App(tk.Tk):
         )
         self.browse_btn.pack(side=tk.LEFT)
 
-        opts = ttk.Frame(settings, style="Card.TFrame")
+        opts = tk.Frame(settings, bg=SURFACE)
         opts.pack(fill=tk.X, pady=4)
 
         self.audio_only_var = tk.BooleanVar(value=self.settings["audio_only"])
@@ -319,13 +351,15 @@ class App(tk.Tk):
             row=0, column=2, sticky=tk.W
         )
 
-        fmt_row = ttk.Frame(settings, style="Card.TFrame")
+        fmt_row = tk.Frame(settings, bg=SURFACE)
         fmt_row.pack(fill=tk.X, pady=6)
 
-        def _field(parent, label: str) -> ttk.Frame:
-            col = ttk.Frame(parent, style="Card.TFrame")
+        def _field(parent, label: str) -> tk.Frame:
+            col = tk.Frame(parent, bg=SURFACE)
             col.pack(side=tk.LEFT, padx=(0, 16))
-            ttk.Label(col, text=label, style="CardMuted.TLabel").pack(anchor=tk.W, pady=(0, 4))
+            tk.Label(col, text=label, bg=SURFACE, fg=MUTED, font=("Helvetica Neue", 11)).pack(
+                anchor=tk.W, pady=(0, 4)
+            )
             return col
 
         q_col = _field(fmt_row, "Quality")
@@ -366,7 +400,7 @@ class App(tk.Tk):
         )
         self.audio_combo.pack(anchor=tk.W)
 
-        subset = ttk.Frame(settings, style="Card.TFrame")
+        subset = tk.Frame(settings, bg=SURFACE)
         subset.pack(fill=tk.X, pady=(6, 0))
         self.subset_var = tk.BooleanVar(value=self.settings["subset_enabled"])
         ttk.Checkbutton(
@@ -375,9 +409,11 @@ class App(tk.Tk):
             variable=self.subset_var,
         ).pack(anchor=tk.W)
 
-        range_row = ttk.Frame(settings, style="Card.TFrame")
+        range_row = tk.Frame(settings, bg=SURFACE)
         range_row.pack(fill=tk.X, pady=(6, 0))
-        ttk.Label(range_row, text="Start", style="CardMuted.TLabel").pack(side=tk.LEFT)
+        tk.Label(range_row, text="Start", bg=SURFACE, fg=MUTED, font=("Helvetica Neue", 11)).pack(
+            side=tk.LEFT
+        )
         self.start_var = tk.StringVar(value=str(self.settings["subset_start"]))
         self.start_entry = ModernEntry(
             range_row,
@@ -388,7 +424,9 @@ class App(tk.Tk):
             bg=SURFACE,
         )
         self.start_entry.pack(side=tk.LEFT, padx=(8, 16))
-        ttk.Label(range_row, text="End (0 = all)", style="CardMuted.TLabel").pack(side=tk.LEFT)
+        tk.Label(
+            range_row, text="End (0 = all)", bg=SURFACE, fg=MUTED, font=("Helvetica Neue", 11)
+        ).pack(side=tk.LEFT)
         self.end_var = tk.StringVar(value=str(self.settings["subset_end"]))
         self.end_entry = ModernEntry(
             range_row,
@@ -445,16 +483,35 @@ class App(tk.Tk):
         self.ffmpeg_label = ttk.Label(ff_row, text="", style="Muted.TLabel")
         self.ffmpeg_label.pack(side=tk.LEFT)
 
-        prog = ttk.LabelFrame(outer, text="", padding=12)
-        prog.pack(fill=tk.BOTH, expand=True)
+        prog_shell = tk.Frame(outer, bg=BORDER, highlightthickness=0, bd=0)
+        prog_shell.pack(fill=tk.BOTH, expand=True)
+        prog_inner = tk.Frame(prog_shell, bg=SURFACE, highlightthickness=0, bd=0)
+        prog_inner.pack(fill=tk.BOTH, expand=True, padx=1, pady=1)
+        prog = tk.Frame(prog_inner, bg=SURFACE, highlightthickness=0, bd=0)
+        prog.pack(fill=tk.BOTH, expand=True, padx=12, pady=12)
+
         self._section_header(prog, "activity", "PROGRESS").pack(anchor=tk.W, pady=(0, 6))
 
         self.status_var = tk.StringVar(value="Ready")
-        ttk.Label(prog, textvariable=self.status_var, style="Status.TLabel").pack(anchor=tk.W)
+        tk.Label(
+            prog,
+            textvariable=self.status_var,
+            bg=SURFACE,
+            fg=TEXT,
+            font=("Helvetica Neue", 12),
+            anchor="w",
+        ).pack(anchor=tk.W)
         self.progress = ttk.Progressbar(prog, mode="determinate", maximum=100)
         self.progress.pack(fill=tk.X, pady=6)
         self.speed_var = tk.StringVar(value="")
-        ttk.Label(prog, textvariable=self.speed_var, style="CardMuted.TLabel").pack(anchor=tk.W)
+        tk.Label(
+            prog,
+            textvariable=self.speed_var,
+            bg=SURFACE,
+            fg=MUTED,
+            font=("Helvetica Neue", 11),
+            anchor="w",
+        ).pack(anchor=tk.W)
 
         log_wrap = tk.Frame(prog, bg=BORDER, padx=1, pady=1)
         log_wrap.pack(fill=tk.BOTH, expand=True, pady=(8, 0))
