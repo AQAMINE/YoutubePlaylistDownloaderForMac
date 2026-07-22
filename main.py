@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""YouTube Playlist Downloader — Python / macOS version."""
+"""YouTube Playlist Downloader — Python / macOS version with modern UI/UX design."""
 
 from __future__ import annotations
 
@@ -24,7 +24,6 @@ except ImportError:
 from downloader import (
     AUDIO_FORMATS,
     VIDEO_FORMATS,
-    VIDEO_QUALITIES,
     DownloadCancelled,
     Downloader,
     fetch_info,
@@ -32,17 +31,18 @@ from downloader import (
     summarize_info,
 )
 from icons import ACCENT, DANGER, INK, MUTED, OK, photo
-from widgets import ModernButton, ModernEntry, ModernSelect
+from widgets import ModernButton, ModernCheckbutton, ModernEntry, ModernSelect
 
 APP_DIR = Path(__file__).resolve().parent
 SETTINGS_PATH = APP_DIR / "settings.json"
 DEFAULT_SAVE = Path.home() / "Downloads" / "YouTubeDownloads"
 
-# Studio-tool palette (cool slate + teal — not purple / not cream-serif)
-BG = "#F2F5F8"
+# Modern Palette Tokens (Slate & Vibrant Teal)
+BG = "#F8FAFC"
 SURFACE = "#FFFFFF"
-BORDER = "#D8DEE6"
-TEXT = "#1A2332"
+BORDER = "#E2E8F0"
+TEXT = "#0F172A"
+TEXT_MUTED = "#64748B"
 
 QUALITY_LABELS = ["Best", "4320p", "2160p", "1440p", "1080p", "720p", "480p", "360p", "240p", "144p"]
 QUALITY_TO_VALUE = {
@@ -66,8 +66,8 @@ class App(tk.Tk):
     def __init__(self) -> None:
         super().__init__()
         self.title("YouTube Playlist Downloader")
-        self.geometry("900x760")
-        self.minsize(780, 680)
+        self.geometry("920x800")
+        self.minsize(820, 720)
         self.configure(bg=BG)
 
         self.settings = self._load_settings()
@@ -95,14 +95,15 @@ class App(tk.Tk):
             "cancel": photo("cancel", 16, DANGER, master=self),
             "folder": photo("folder", 16, INK, master=self),
             "folder_open": photo("folder_open", 16, INK, master=self),
-            "link": photo("link", 16, MUTED, master=self),
-            "sliders": photo("sliders", 16, MUTED, master=self),
-            "activity": photo("activity", 16, MUTED, master=self),
-            "check": photo("check", 14, master=self),
-            "warning": photo("warning", 14, master=self),
-            "monitor": photo("monitor", 15, MUTED, master=self),
-            "film": photo("film", 15, MUTED, master=self),
-            "music": photo("music", 15, MUTED, master=self),
+            "link": photo("link", 16, ACCENT, master=self),
+            "sliders": photo("sliders", 16, ACCENT, master=self),
+            "activity": photo("activity", 16, ACCENT, master=self),
+            "check": photo("check", 14, OK, master=self),
+            "warning": photo("warning", 14, DANGER, master=self),
+            "monitor": photo("monitor", 16, MUTED, master=self),
+            "film": photo("film", 16, MUTED, master=self),
+            "music": photo("music", 16, MUTED, master=self),
+            "clear": photo("clear", 12, MUTED, master=self),
         }
 
     # ── settings ──────────────────────────────────────────────
@@ -147,66 +148,13 @@ class App(tk.Tk):
     # ── UI ────────────────────────────────────────────────────
     def _build_style(self) -> None:
         style = ttk.Style(self)
-        # clam gives reliable custom colors on macOS
         if "clam" in style.theme_names():
             style.theme_use("clam")
 
         style.configure(".", background=BG, foreground=TEXT, font=("Helvetica Neue", 12))
         style.configure("TFrame", background=BG)
-        style.configure("Card.TFrame", background=SURFACE, relief="flat")
-        style.configure(
-            "TLabelframe",
-            background=SURFACE,
-            foreground=MUTED,
-            bordercolor=BORDER,
-            relief="solid",
-            borderwidth=1,
-        )
-        style.configure(
-            "TLabelframe.Label",
-            background=SURFACE,
-            foreground=MUTED,
-            font=("Helvetica Neue", 11, "bold"),
-        )
-        style.configure("TLabel", background=BG, foreground=TEXT)
-        style.configure("Card.TLabel", background=SURFACE, foreground=TEXT)
-        style.configure("Muted.TLabel", background=BG, foreground=MUTED, font=("Helvetica Neue", 12))
-        style.configure(
-            "CardMuted.TLabel",
-            background=SURFACE,
-            foreground=MUTED,
-            font=("Helvetica Neue", 11),
-        )
-        style.configure(
-            "Title.TLabel",
-            background=BG,
-            foreground=TEXT,
-            font=("Helvetica Neue", 20, "bold"),
-        )
-        style.configure(
-            "Subtitle.TLabel",
-            background=BG,
-            foreground=MUTED,
-            font=("Helvetica Neue", 12),
-        )
-        style.configure(
-            "Status.TLabel",
-            background=SURFACE,
-            foreground=TEXT,
-            font=("Helvetica Neue", 12),
-        )
-        style.configure(
-            "TEntry",
-            fieldbackground=SURFACE,
-            foreground=TEXT,
-            bordercolor=BORDER,
-            lightcolor=BORDER,
-            darkcolor=BORDER,
-            padding=10,
-            insertcolor=TEXT,
-        )
-        style.configure("TCheckbutton", background=SURFACE, foreground=TEXT, focuscolor=BG)
-        style.map("TCheckbutton", background=[("active", SURFACE)])
+        style.configure("Title.TLabel", background=BG, foreground=TEXT, font=("Helvetica Neue", 22, "bold"))
+        style.configure("Subtitle.TLabel", background=BG, foreground=TEXT_MUTED, font=("Helvetica Neue", 12))
         style.configure(
             "Horizontal.TProgressbar",
             troughcolor="#E2E8F0",
@@ -214,68 +162,88 @@ class App(tk.Tk):
             bordercolor=BORDER,
             lightcolor=ACCENT,
             darkcolor=ACCENT,
-            thickness=10,
+            thickness=12,
         )
 
-    def _card(self, parent: tk.Misc, *, pady: tuple[int, int] = (0, 8)) -> tk.Frame:
-        """White card with a continuous border (no LabelFrame top gap)."""
-        shell = tk.Frame(
-            parent,
-            bg=BORDER,
-            highlightthickness=0,
-            bd=0,
-        )
+    def _card(self, parent: tk.Misc, *, pady: tuple[int, int] = (0, 10)) -> tk.Frame:
+        """Sleek white card container with rounded aesthetics and continuous border."""
+        shell = tk.Frame(parent, bg=BORDER, highlightthickness=0, bd=0)
         shell.pack(fill=tk.BOTH, expand=False, pady=pady)
-        # 1px border via outer shell color + inner white panel
+
         inner = tk.Frame(shell, bg=SURFACE, highlightthickness=0, bd=0)
         inner.pack(fill=tk.BOTH, expand=True, padx=1, pady=1)
+
         content = tk.Frame(inner, bg=SURFACE, highlightthickness=0, bd=0)
-        content.pack(fill=tk.BOTH, expand=True, padx=12, pady=12)
+        content.pack(fill=tk.BOTH, expand=True, padx=16, pady=14)
         return content
 
     def _section_header(self, parent: tk.Misc, icon: str, title: str) -> tk.Frame:
         row = tk.Frame(parent, bg=SURFACE)
-        tk.Label(row, image=self._icons[icon], bg=SURFACE, bd=0).pack(side=tk.LEFT, padx=(0, 6))
+        badge = tk.Frame(row, bg="#F0FDFA", padx=6, pady=4)
+        badge.pack(side=tk.LEFT, padx=(0, 10))
+        tk.Label(badge, image=self._icons[icon], bg="#F0FDFA", bd=0).pack(side=tk.LEFT)
+
         tk.Label(
             row,
             text=title,
             bg=SURFACE,
-            fg=MUTED,
-            font=("Helvetica Neue", 11, "bold"),
+            fg=TEXT,
+            font=("Helvetica Neue", 12, "bold"),
             bd=0,
         ).pack(side=tk.LEFT)
         return row
 
     def _build_ui(self) -> None:
-        outer = ttk.Frame(self, padding=(18, 14))
+        outer = ttk.Frame(self, padding=(20, 16))
         outer.pack(fill=tk.BOTH, expand=True)
 
+        # ── Header ─────────────────────────────────────────────
         header = ttk.Frame(outer)
-        header.pack(fill=tk.X, pady=(0, 10))
-        ttk.Label(header, image=self._icons["play"]).pack(side=tk.LEFT, padx=(0, 12))
+        header.pack(fill=tk.X, pady=(0, 12))
+
+        logo_frame = tk.Frame(header, bg="#F0FDFA", padx=8, pady=8)
+        logo_frame.pack(side=tk.LEFT, padx=(0, 14))
+        tk.Label(logo_frame, image=self._icons["play"], bg="#F0FDFA", bd=0).pack()
+
         titles = ttk.Frame(header)
         titles.pack(side=tk.LEFT, fill=tk.X)
-        ttk.Label(titles, text="Playlist Downloader", style="Title.TLabel").pack(anchor=tk.W)
+        ttk.Label(titles, text="YouTube Playlist Downloader", style="Title.TLabel").pack(anchor=tk.W)
         ttk.Label(
             titles,
-            text="Paste a YouTube video, playlist, or channel URL",
+            text="Download videos, audio, playlists, or entire channels in high quality",
             style="Subtitle.TLabel",
         ).pack(anchor=tk.W, pady=(2, 0))
 
+        # FFmpeg status badge on top-right
+        ff_badge = tk.Frame(header, bg=BG)
+        ff_badge.pack(side=tk.RIGHT, anchor=tk.NE)
+        self.ffmpeg_icon = tk.Label(ff_badge, image=self._icons["check"], bg=BG, bd=0)
+        self.ffmpeg_icon.pack(side=tk.LEFT, padx=(0, 6))
+        self.ffmpeg_label = tk.Label(
+            ff_badge, text="", bg=BG, fg=OK, font=("Helvetica Neue", 11, "bold")
+        )
+        self.ffmpeg_label.pack(side=tk.LEFT)
+
+        # ── Source Card ────────────────────────────────────────
         url_card = self._card(outer)
-        self._section_header(url_card, "link", "SOURCE").pack(anchor=tk.W, pady=(0, 8))
+        self._section_header(url_card, "link", "SOURCE MEDIA URL").pack(anchor=tk.W, pady=(0, 10))
 
         url_row = tk.Frame(url_card, bg=SURFACE)
         url_row.pack(fill=tk.X)
         self.url_var = tk.StringVar()
         self.url_entry = ModernEntry(
-            url_row, textvariable=self.url_var, font=("Helvetica Neue", 13), bg=SURFACE
+            url_row,
+            textvariable=self.url_var,
+            font=("Helvetica Neue", 13),
+            bg=SURFACE,
+            show_clear=True,
         )
         self.url_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 10))
         self.url_entry.bind("<Return>", lambda _e: self.fetch_metadata())
+
         self.fetch_btn = ModernButton(
             url_row,
-            text="Fetch",
+            text="Fetch Info",
             icon=self._icons["search"],
             command=self.fetch_metadata,
             variant="ghost",
@@ -283,38 +251,46 @@ class App(tk.Tk):
         )
         self.fetch_btn.pack(side=tk.LEFT)
 
+        # Metadata preview container
+        self.preview_box = tk.Frame(url_card, bg="#F8FAFC", highlightthickness=1, highlightbackground=BORDER)
+        self.preview_box.pack(fill=tk.X, pady=(10, 0))
+        
+        preview_inner = tk.Frame(self.preview_box, bg="#F8FAFC", padx=12, pady=10)
+        preview_inner.pack(fill=tk.X)
+
         self.info_title = tk.Label(
-            url_card,
-            text="Waiting for a URL…",
-            bg=SURFACE,
-            fg=TEXT,
-            font=("Helvetica Neue", 12),
+            preview_inner,
+            text="Paste a YouTube URL above and click Fetch Info to start",
+            bg="#F8FAFC",
+            fg=TEXT_MUTED,
+            font=("Helvetica Neue", 12, "bold"),
             anchor="w",
             justify="left",
-            wraplength=740,
+            wraplength=760,
         )
-        self.info_title.pack(anchor=tk.W, pady=(8, 0))
+        self.info_title.pack(anchor=tk.W)
+
         self.info_meta = tk.Label(
-            url_card,
+            preview_inner,
             text="",
-            bg=SURFACE,
-            fg=MUTED,
+            bg="#F8FAFC",
+            fg=TEXT_MUTED,
             font=("Helvetica Neue", 11),
             anchor="w",
             justify="left",
         )
-        self.info_meta.pack(anchor=tk.W, pady=(2, 0))
+        self.info_meta.pack(anchor=tk.W, pady=(4, 0))
 
+        # ── Settings Card ──────────────────────────────────────
         settings = self._card(outer)
-        self._section_header(settings, "sliders", "DOWNLOAD SETTINGS").pack(
-            anchor=tk.W, pady=(0, 8)
-        )
+        self._section_header(settings, "sliders", "DOWNLOAD CONFIGURATION").pack(anchor=tk.W, pady=(0, 10))
 
+        # Save directory
         path_row = tk.Frame(settings, bg=SURFACE)
-        path_row.pack(fill=tk.X, pady=(0, 6))
-        tk.Label(path_row, text="Save to", bg=SURFACE, fg=MUTED, font=("Helvetica Neue", 11)).pack(
-            side=tk.LEFT
-        )
+        path_row.pack(fill=tk.X, pady=(0, 8))
+        tk.Label(
+            path_row, text="Save to", bg=SURFACE, fg=TEXT_MUTED, font=("Helvetica Neue", 11, "bold")
+        ).pack(side=tk.LEFT)
         self.save_var = tk.StringVar(value=self.settings["save_path"])
         self.save_entry = ModernEntry(
             path_row, textvariable=self.save_var, font=("Helvetica Neue", 12), bg=SURFACE
@@ -330,39 +306,51 @@ class App(tk.Tk):
         )
         self.browse_btn.pack(side=tk.LEFT)
 
+        # Options switches / checkboxes
         opts = tk.Frame(settings, bg=SURFACE)
-        opts.pack(fill=tk.X, pady=4)
+        opts.pack(fill=tk.X, pady=(4, 10))
 
         self.audio_only_var = tk.BooleanVar(value=self.settings["audio_only"])
-        ttk.Checkbutton(
+        self.audio_chk = ModernCheckbutton(
             opts,
             text="Audio only",
             variable=self.audio_only_var,
             command=self._toggle_mode,
-        ).grid(row=0, column=0, sticky=tk.W, padx=(0, 16))
+            bg=SURFACE,
+        )
+        self.audio_chk.pack(side=tk.LEFT, padx=(0, 20))
 
         self.skip_var = tk.BooleanVar(value=self.settings["skip_existing"])
-        ttk.Checkbutton(opts, text="Skip existing", variable=self.skip_var).grid(
-            row=0, column=1, sticky=tk.W, padx=(0, 16)
+        self.skip_chk = ModernCheckbutton(
+            opts,
+            text="Skip existing files",
+            variable=self.skip_var,
+            bg=SURFACE,
         )
+        self.skip_chk.pack(side=tk.LEFT, padx=(0, 20))
 
         self.subdir_var = tk.BooleanVar(value=self.settings["playlist_subdir"])
-        ttk.Checkbutton(opts, text="Playlist folder", variable=self.subdir_var).grid(
-            row=0, column=2, sticky=tk.W
+        self.subdir_chk = ModernCheckbutton(
+            opts,
+            text="Create playlist subfolder",
+            variable=self.subdir_var,
+            bg=SURFACE,
         )
+        self.subdir_chk.pack(side=tk.LEFT)
 
+        # Format & Quality Selects Row
         fmt_row = tk.Frame(settings, bg=SURFACE)
-        fmt_row.pack(fill=tk.X, pady=6)
+        fmt_row.pack(fill=tk.X, pady=(0, 10))
 
         def _field(parent, label: str) -> tk.Frame:
             col = tk.Frame(parent, bg=SURFACE)
-            col.pack(side=tk.LEFT, padx=(0, 16))
-            tk.Label(col, text=label, bg=SURFACE, fg=MUTED, font=("Helvetica Neue", 11)).pack(
+            col.pack(side=tk.LEFT, padx=(0, 24))
+            tk.Label(col, text=label, bg=SURFACE, fg=TEXT_MUTED, font=("Helvetica Neue", 11, "bold")).pack(
                 anchor=tk.W, pady=(0, 4)
             )
             return col
 
-        q_col = _field(fmt_row, "Quality")
+        q_col = _field(fmt_row, "Video Quality")
         self.quality_var = tk.StringVar(
             value=VALUE_TO_QUALITY.get(str(self.settings["quality"]), "1080p")
         )
@@ -376,7 +364,7 @@ class App(tk.Tk):
         )
         self.quality_combo.pack(anchor=tk.W)
 
-        v_col = _field(fmt_row, "Video format")
+        v_col = _field(fmt_row, "Video Format")
         self.video_fmt_var = tk.StringVar(value=str(self.settings["video_format"]).upper())
         self.video_combo = ModernSelect(
             v_col,
@@ -388,7 +376,7 @@ class App(tk.Tk):
         )
         self.video_combo.pack(anchor=tk.W)
 
-        a_col = _field(fmt_row, "Audio format")
+        a_col = _field(fmt_row, "Audio Format")
         self.audio_fmt_var = tk.StringVar(value=str(self.settings["audio_format"]).upper())
         self.audio_combo = ModernSelect(
             a_col,
@@ -400,57 +388,61 @@ class App(tk.Tk):
         )
         self.audio_combo.pack(anchor=tk.W)
 
-        subset = tk.Frame(settings, bg=SURFACE)
-        subset.pack(fill=tk.X, pady=(6, 0))
-        self.subset_var = tk.BooleanVar(value=self.settings["subset_enabled"])
-        ttk.Checkbutton(
-            subset,
-            text="Download subset (indexes)",
-            variable=self.subset_var,
-        ).pack(anchor=tk.W)
+        # Subset / Index range
+        subset_row = tk.Frame(settings, bg=SURFACE)
+        subset_row.pack(fill=tk.X, pady=(4, 0))
 
-        range_row = tk.Frame(settings, bg=SURFACE)
-        range_row.pack(fill=tk.X, pady=(6, 0))
-        tk.Label(range_row, text="Start", bg=SURFACE, fg=MUTED, font=("Helvetica Neue", 11)).pack(
-            side=tk.LEFT
+        self.subset_var = tk.BooleanVar(value=self.settings["subset_enabled"])
+        self.subset_chk = ModernCheckbutton(
+            subset_row,
+            text="Download item subset (index range)",
+            variable=self.subset_var,
+            bg=SURFACE,
+        )
+        self.subset_chk.pack(side=tk.LEFT, padx=(0, 16))
+
+        tk.Label(subset_row, text="Start", bg=SURFACE, fg=TEXT_MUTED, font=("Helvetica Neue", 11)).pack(
+            side=tk.LEFT, padx=(8, 4)
         )
         self.start_var = tk.StringVar(value=str(self.settings["subset_start"]))
         self.start_entry = ModernEntry(
-            range_row,
+            subset_row,
             textvariable=self.start_var,
             width=4,
-            fixed_width=84,
+            fixed_width=64,
             font=("Helvetica Neue", 12),
             bg=SURFACE,
         )
-        self.start_entry.pack(side=tk.LEFT, padx=(8, 16))
+        self.start_entry.pack(side=tk.LEFT, padx=(0, 14))
+
         tk.Label(
-            range_row, text="End (0 = all)", bg=SURFACE, fg=MUTED, font=("Helvetica Neue", 11)
-        ).pack(side=tk.LEFT)
+            subset_row, text="End (0 = all)", bg=SURFACE, fg=TEXT_MUTED, font=("Helvetica Neue", 11)
+        ).pack(side=tk.LEFT, padx=(0, 4))
         self.end_var = tk.StringVar(value=str(self.settings["subset_end"]))
         self.end_entry = ModernEntry(
-            range_row,
+            subset_row,
             textvariable=self.end_var,
             width=4,
-            fixed_width=84,
+            fixed_width=64,
             font=("Helvetica Neue", 12),
             bg=SURFACE,
         )
-        self.end_entry.pack(side=tk.LEFT, padx=(8, 0))
+        self.end_entry.pack(side=tk.LEFT)
 
         self._toggle_mode()
 
+        # ── Action Buttons ─────────────────────────────────────
         actions = ttk.Frame(outer)
-        actions.pack(fill=tk.X, pady=(6, 8))
+        actions.pack(fill=tk.X, pady=(4, 10))
 
         self.download_btn = ModernButton(
             actions,
-            text="Download",
+            text="Start Download",
             icon=self._icons["download"],
             command=self.start_download,
             variant="primary",
-            padx=16,
-            pady=8,
+            padx=20,
+            pady=10,
             bg=BG,
         )
         self.download_btn.pack(side=tk.LEFT)
@@ -461,36 +453,50 @@ class App(tk.Tk):
             icon=self._icons["cancel"],
             command=self.cancel_download,
             variant="danger",
+            padx=16,
+            pady=10,
             bg=BG,
         )
         self.cancel_btn.configure(state=tk.DISABLED)
-        self.cancel_btn.pack(side=tk.LEFT, padx=10)
+        self.cancel_btn.pack(side=tk.LEFT, padx=12)
 
         self.open_btn = ModernButton(
             actions,
-            text="Open folder",
+            text="Open Download Folder",
             icon=self._icons["folder_open"],
             command=self._open_folder,
             variant="ghost",
+            padx=16,
+            pady=10,
             bg=BG,
         )
         self.open_btn.pack(side=tk.LEFT)
 
-        ff_row = ttk.Frame(actions)
-        ff_row.pack(side=tk.RIGHT)
-        self.ffmpeg_icon = ttk.Label(ff_row, image=self._icons["check"])
-        self.ffmpeg_icon.pack(side=tk.LEFT, padx=(0, 6))
-        self.ffmpeg_label = ttk.Label(ff_row, text="", style="Muted.TLabel")
-        self.ffmpeg_label.pack(side=tk.LEFT)
-
+        # ── Progress & Output Card ─────────────────────────────
         prog_shell = tk.Frame(outer, bg=BORDER, highlightthickness=0, bd=0)
         prog_shell.pack(fill=tk.BOTH, expand=True)
+
         prog_inner = tk.Frame(prog_shell, bg=SURFACE, highlightthickness=0, bd=0)
         prog_inner.pack(fill=tk.BOTH, expand=True, padx=1, pady=1)
-        prog = tk.Frame(prog_inner, bg=SURFACE, highlightthickness=0, bd=0)
-        prog.pack(fill=tk.BOTH, expand=True, padx=12, pady=12)
 
-        self._section_header(prog, "activity", "PROGRESS").pack(anchor=tk.W, pady=(0, 6))
+        prog = tk.Frame(prog_inner, bg=SURFACE, highlightthickness=0, bd=0)
+        prog.pack(fill=tk.BOTH, expand=True, padx=16, pady=14)
+
+        prog_head = tk.Frame(prog, bg=SURFACE)
+        prog_head.pack(fill=tk.X, pady=(0, 8))
+        self._section_header(prog_head, "activity", "PROGRESS & LOGS").pack(side=tk.LEFT)
+
+        clear_log_btn = ModernButton(
+            prog_head,
+            text="Clear Logs",
+            icon=self._icons["clear"],
+            command=self._clear_log,
+            variant="ghost",
+            padx=10,
+            pady=4,
+            bg=SURFACE,
+        )
+        clear_log_btn.pack(side=tk.RIGHT)
 
         self.status_var = tk.StringVar(value="Ready")
         tk.Label(
@@ -498,34 +504,37 @@ class App(tk.Tk):
             textvariable=self.status_var,
             bg=SURFACE,
             fg=TEXT,
-            font=("Helvetica Neue", 12),
+            font=("Helvetica Neue", 12, "bold"),
             anchor="w",
         ).pack(anchor=tk.W)
+
         self.progress = ttk.Progressbar(prog, mode="determinate", maximum=100)
-        self.progress.pack(fill=tk.X, pady=6)
+        self.progress.pack(fill=tk.X, pady=(6, 4))
+
         self.speed_var = tk.StringVar(value="")
         tk.Label(
             prog,
             textvariable=self.speed_var,
             bg=SURFACE,
-            fg=MUTED,
+            fg=TEXT_MUTED,
             font=("Helvetica Neue", 11),
             anchor="w",
         ).pack(anchor=tk.W)
 
-        log_wrap = tk.Frame(prog, bg=BORDER, padx=1, pady=1)
+        log_wrap = tk.Frame(prog, bg="#0F172A", padx=1, pady=1)
         log_wrap.pack(fill=tk.BOTH, expand=True, pady=(8, 0))
+
         self.log = tk.Text(
             log_wrap,
-            height=5,
+            height=6,
             wrap=tk.WORD,
             font=("Menlo", 11),
             bg="#0F172A",
             fg="#E2E8F0",
             insertbackground="#E2E8F0",
             relief=tk.FLAT,
-            padx=10,
-            pady=8,
+            padx=12,
+            pady=10,
             highlightthickness=0,
         )
         self.log.pack(fill=tk.BOTH, expand=True)
@@ -561,15 +570,20 @@ class App(tk.Tk):
     def _refresh_ffmpeg_status(self) -> None:
         if ffmpeg_available():
             self.ffmpeg_icon.configure(image=self._icons["check"])
-            self.ffmpeg_label.configure(text="FFmpeg ready", foreground=OK)
+            self.ffmpeg_label.configure(text="FFmpeg ready", fg=OK)
         else:
             self.ffmpeg_icon.configure(image=self._icons["warning"])
-            self.ffmpeg_label.configure(text="FFmpeg missing", foreground=DANGER)
+            self.ffmpeg_label.configure(text="FFmpeg missing", fg=DANGER)
 
     def _append_log(self, message: str) -> None:
         self.log.configure(state=tk.NORMAL)
         self.log.insert(tk.END, message + "\n")
         self.log.see(tk.END)
+        self.log.configure(state=tk.DISABLED)
+
+    def _clear_log(self) -> None:
+        self.log.configure(state=tk.NORMAL)
+        self.log.delete("1.0", tk.END)
         self.log.configure(state=tk.DISABLED)
 
     def _set_busy(self, busy: bool) -> None:
@@ -588,7 +602,7 @@ class App(tk.Tk):
             return
 
         self.status_var.set("Fetching info…")
-        self.info_title.configure(text="Loading…")
+        self.info_title.configure(text="Loading metadata from YouTube…", fg=TEXT)
         self.info_meta.configure(text="")
         self._append_log(f"Fetching: {url}")
 
@@ -605,22 +619,22 @@ class App(tk.Tk):
 
     def _on_info(self, summary: dict) -> None:
         self._info = summary
-        self.info_title.configure(text=summary["title"])
-        kind = "Playlist / channel" if summary["kind"] == "playlist" else "Video"
-        extra = f"{kind}  ·  {summary['count']} item(s)"
+        self.info_title.configure(text=summary["title"], fg=TEXT)
+        kind = "Playlist / Channel" if summary["kind"] == "playlist" else "Video"
+        extra = f"Type: {kind}  •  {summary['count']} item(s)"
         if summary.get("uploader"):
-            extra += f"  ·  {summary['uploader']}"
+            extra += f"  •  Channel: {summary['uploader']}"
         if summary.get("view_count"):
-            extra += f"  ·  {summary['view_count']:,} views"
+            extra += f"  •  {summary['view_count']:,} views"
         self.info_meta.configure(text=extra)
         self.status_var.set("Ready to download")
         self._append_log(f"Found: {summary['title']} ({summary['count']} items)")
 
     def _on_info_error(self, err: str) -> None:
         self._info = None
-        self.info_title.configure(text="Could not load URL")
+        self.info_title.configure(text="Could not load URL metadata", fg=DANGER)
         self.info_meta.configure(text=err)
-        self.status_var.set("Error")
+        self.status_var.set("Error fetching metadata")
         self._append_log(f"Error: {err}")
         messagebox.showerror("Fetch failed", err)
 
@@ -648,7 +662,7 @@ class App(tk.Tk):
             if end == 0:
                 end = None
         except ValueError:
-            messagebox.showerror("Invalid subset", "Start/End must be numbers.")
+            messagebox.showerror("Invalid subset", "Start/End must be valid numbers.")
             return
 
         self._save_settings()
@@ -711,14 +725,14 @@ class App(tk.Tk):
             self.progress["value"] = 100
             filename = Path(status.get("filename") or "").name
             self._append_log(f"Finished: {filename}")
-            self.status_var.set("Processing…")
+            self.status_var.set("Processing video/audio streams…")
 
     def _on_download_done(self) -> None:
         self._set_busy(False)
         self.progress["value"] = 100
-        self.status_var.set("Download complete")
+        self.status_var.set("Download complete!")
         self.speed_var.set("")
-        self._append_log("All downloads finished.")
+        self._append_log("All downloads finished successfully.")
         messagebox.showinfo("Done", "Download complete.")
 
     def _on_download_fail(self, err: str) -> None:
@@ -731,7 +745,7 @@ class App(tk.Tk):
     def cancel_download(self) -> None:
         if self._downloader:
             self._downloader.cancel()
-            self.status_var.set("Cancelling…")
+            self.status_var.set("Cancelling download…")
 
     def _on_close(self) -> None:
         try:
@@ -749,7 +763,7 @@ def main() -> None:
         from PIL import Image  # noqa: F401
     except ImportError:
         print("Missing dependency. Run:")
-        print(f"  pip3 install -r \"{APP_DIR / 'requirements.txt'}\"")
+        print(f'  pip3 install -r "{APP_DIR / "requirements.txt"}"')
         sys.exit(1)
 
     app = App()
