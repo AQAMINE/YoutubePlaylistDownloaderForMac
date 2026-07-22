@@ -3,7 +3,7 @@
   "audio_only": false,
   "audio_format": "mp3",
   "video_format": "mp4",
-  "quality": "1080",
+  "quality": "2160",
   "skip_existing": true,
   "playlist_subdir": true,
   "subset_enabled": false,
