@@ -9,11 +9,9 @@ import subprocess
 import sys
 import threading
 import tkinter as tk
-import urllib.error
-import urllib.request
-from io import BytesIO
 from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
+from typing import Any
 
 # macOS python.org builds often lack CA certs — fix SSL before any network use.
 try:
@@ -22,9 +20,7 @@ try:
     os.environ.setdefault("SSL_CERT_FILE", certifi.where())
     os.environ.setdefault("REQUESTS_CA_BUNDLE", certifi.where())
 except ImportError:
-    certifi = None  # type: ignore[assignment]
-
-from PIL import Image, ImageDraw, ImageTk
+    pass
 
 from downloader import (
     AUDIO_FORMATS,
@@ -71,8 +67,8 @@ class App(tk.Tk):
     def __init__(self) -> None:
         super().__init__()
         self.title("YouTube Playlist Downloader")
-        self.geometry("920x800")
-        self.minsize(820, 720)
+        self.geometry("900x780")
+        self.minsize(780, 640)
         self.configure(bg=BG)
 
         self.settings = self._load_settings()
@@ -80,8 +76,7 @@ class App(tk.Tk):
         self._downloader: Downloader | None = None
         self._busy = False
         self._icons: dict[str, tk.PhotoImage] = {}
-        self._thumb_photo: ImageTk.PhotoImage | None = None
-        self._thumb_token = 0
+        self._thumb_photo: tk.PhotoImage | None = None
 
         self._load_icons()
         self._build_style()
@@ -160,8 +155,8 @@ class App(tk.Tk):
 
         style.configure(".", background=BG, foreground=TEXT, font=("Helvetica Neue", 12))
         style.configure("TFrame", background=BG)
-        style.configure("Title.TLabel", background=BG, foreground=TEXT, font=("Helvetica Neue", 22, "bold"))
-        style.configure("Subtitle.TLabel", background=BG, foreground=TEXT_MUTED, font=("Helvetica Neue", 12))
+        style.configure("Title.TLabel", background=BG, foreground=TEXT, font=("Helvetica Neue", 20, "bold"))
+        style.configure("Subtitle.TLabel", background=BG, foreground=TEXT_MUTED, font=("Helvetica Neue", 11))
         style.configure(
             "Horizontal.TProgressbar",
             troughcolor="#E2E8F0",
@@ -169,10 +164,10 @@ class App(tk.Tk):
             bordercolor=BORDER,
             lightcolor=ACCENT,
             darkcolor=ACCENT,
-            thickness=12,
+            thickness=10,
         )
 
-    def _card(self, parent: tk.Misc, *, pady: tuple[int, int] = (0, 10)) -> tk.Frame:
+    def _card(self, parent: tk.Misc, *, pady: tuple[int, int] = (0, 6)) -> tk.Frame:
         """Sleek white card container with rounded aesthetics and continuous border."""
         shell = tk.Frame(parent, bg=BORDER, highlightthickness=0, bd=0)
         shell.pack(fill=tk.BOTH, expand=False, pady=pady)
@@ -181,13 +176,13 @@ class App(tk.Tk):
         inner.pack(fill=tk.BOTH, expand=True, padx=1, pady=1)
 
         content = tk.Frame(inner, bg=SURFACE, highlightthickness=0, bd=0)
-        content.pack(fill=tk.BOTH, expand=True, padx=16, pady=14)
+        content.pack(fill=tk.BOTH, expand=True, padx=14, pady=10)
         return content
 
     def _section_header(self, parent: tk.Misc, icon: str, title: str) -> tk.Frame:
         row = tk.Frame(parent, bg=SURFACE)
-        badge = tk.Frame(row, bg="#F0FDFA", padx=6, pady=4)
-        badge.pack(side=tk.LEFT, padx=(0, 10))
+        badge = tk.Frame(row, bg="#F0FDFA", padx=5, pady=3)
+        badge.pack(side=tk.LEFT, padx=(0, 8))
         tk.Label(badge, image=self._icons[icon], bg="#F0FDFA", bd=0).pack(side=tk.LEFT)
 
         tk.Label(
@@ -195,21 +190,21 @@ class App(tk.Tk):
             text=title,
             bg=SURFACE,
             fg=TEXT,
-            font=("Helvetica Neue", 12, "bold"),
+            font=("Helvetica Neue", 11, "bold"),
             bd=0,
         ).pack(side=tk.LEFT)
         return row
 
     def _build_ui(self) -> None:
-        outer = ttk.Frame(self, padding=(20, 16))
+        outer = ttk.Frame(self, padding=(16, 10))
         outer.pack(fill=tk.BOTH, expand=True)
 
         # ── Header ─────────────────────────────────────────────
         header = ttk.Frame(outer)
-        header.pack(fill=tk.X, pady=(0, 12))
+        header.pack(fill=tk.X, pady=(0, 6))
 
-        logo_frame = tk.Frame(header, bg="#F0FDFA", padx=8, pady=8)
-        logo_frame.pack(side=tk.LEFT, padx=(0, 14))
+        logo_frame = tk.Frame(header, bg="#F0FDFA", padx=6, pady=6)
+        logo_frame.pack(side=tk.LEFT, padx=(0, 10))
         tk.Label(logo_frame, image=self._icons["play"], bg="#F0FDFA", bd=0).pack()
 
         titles = ttk.Frame(header)
@@ -219,13 +214,13 @@ class App(tk.Tk):
             titles,
             text="Download videos, audio, playlists, or entire channels in high quality",
             style="Subtitle.TLabel",
-        ).pack(anchor=tk.W, pady=(2, 0))
+        ).pack(anchor=tk.W, pady=(1, 0))
 
         # FFmpeg status badge on top-right
         ff_badge = tk.Frame(header, bg=BG)
         ff_badge.pack(side=tk.RIGHT, anchor=tk.NE)
         self.ffmpeg_icon = tk.Label(ff_badge, image=self._icons["check"], bg=BG, bd=0)
-        self.ffmpeg_icon.pack(side=tk.LEFT, padx=(0, 6))
+        self.ffmpeg_icon.pack(side=tk.LEFT, padx=(0, 4))
         self.ffmpeg_label = tk.Label(
             ff_badge, text="", bg=BG, fg=OK, font=("Helvetica Neue", 11, "bold")
         )
@@ -233,7 +228,7 @@ class App(tk.Tk):
 
         # ── Source Card ────────────────────────────────────────
         url_card = self._card(outer)
-        self._section_header(url_card, "link", "SOURCE MEDIA URL").pack(anchor=tk.W, pady=(0, 10))
+        self._section_header(url_card, "link", "SOURCE MEDIA URL").pack(anchor=tk.W, pady=(0, 6))
 
         url_row = tk.Frame(url_card, bg=SURFACE)
         url_row.pack(fill=tk.X)
@@ -241,11 +236,11 @@ class App(tk.Tk):
         self.url_entry = ModernEntry(
             url_row,
             textvariable=self.url_var,
-            font=("Helvetica Neue", 13),
+            font=("Helvetica Neue", 12),
             bg=SURFACE,
             show_clear=True,
         )
-        self.url_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 10))
+        self.url_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 8))
         self.url_entry.bind("<Return>", lambda _e: self.fetch_metadata())
 
         self.fetch_btn = ModernButton(
@@ -258,26 +253,26 @@ class App(tk.Tk):
         )
         self.fetch_btn.pack(side=tk.LEFT)
 
-        # Metadata preview: ~75% info text · ~25% first-video thumbnail
+        # Compact Metadata preview box
         self.preview_box = tk.Frame(
             url_card, bg="#F8FAFC", highlightthickness=1, highlightbackground=BORDER
         )
-        self.preview_box.pack(fill=tk.X, pady=(10, 0))
+        self.preview_box.pack(fill=tk.X, pady=(6, 0))
 
-        preview_inner = tk.Frame(self.preview_box, bg="#F8FAFC", padx=12, pady=10)
-        preview_inner.pack(fill=tk.X)
-        preview_inner.columnconfigure(0, weight=3, uniform="preview")
-        preview_inner.columnconfigure(1, weight=1, uniform="preview")
+        self.preview_inner = tk.Frame(self.preview_box, bg="#F8FAFC", padx=10, pady=6)
+        self.preview_inner.pack(fill=tk.X)
+        self.preview_inner.columnconfigure(0, weight=3, uniform="preview")
+        self.preview_inner.columnconfigure(1, weight=1, uniform="preview")
 
-        text_col = tk.Frame(preview_inner, bg="#F8FAFC")
-        text_col.grid(row=0, column=0, sticky="nsew", padx=(0, 12))
+        text_col = tk.Frame(self.preview_inner, bg="#F8FAFC")
+        text_col.grid(row=0, column=0, sticky="nsew", padx=(0, 8))
 
         self.info_title = tk.Label(
             text_col,
-            text="Paste a YouTube URL above and click Fetch Info to start",
+            text="Paste a YouTube URL above and click Fetch Info to load details",
             bg="#F8FAFC",
             fg=TEXT_MUTED,
-            font=("Helvetica Neue", 12, "bold"),
+            font=("Helvetica Neue", 11, "bold"),
             anchor="w",
             justify="left",
             wraplength=520,
@@ -289,21 +284,20 @@ class App(tk.Tk):
             text="",
             bg="#F8FAFC",
             fg=TEXT_MUTED,
-            font=("Helvetica Neue", 11),
+            font=("Helvetica Neue", 10),
             anchor="w",
             justify="left",
             wraplength=520,
         )
-        self.info_meta.pack(anchor=tk.W, fill=tk.X, pady=(4, 0))
+        self.info_meta.pack(anchor=tk.W, fill=tk.X, pady=(2, 0))
 
-        thumb_col = tk.Frame(preview_inner, bg="#F8FAFC")
-        thumb_col.grid(row=0, column=1, sticky="nse")
-
+        # Thumbnail frame (hidden by default until fetched to save vertical space)
+        self.thumb_col = tk.Frame(self.preview_inner, bg="#F8FAFC")
         self.thumb_frame = tk.Frame(
-            thumb_col,
+            self.thumb_col,
             bg="#E2E8F0",
-            width=168,
-            height=94,
+            width=120,
+            height=68,
             highlightthickness=1,
             highlightbackground=BORDER,
         )
@@ -317,28 +311,27 @@ class App(tk.Tk):
             compound=tk.TOP,
             bg="#E2E8F0",
             fg=TEXT_MUTED,
-            font=("Helvetica Neue", 9),
+            font=("Helvetica Neue", 8),
             bd=0,
         )
         self.thumb_label.pack(expand=True, fill=tk.BOTH)
-
-        preview_inner.bind("<Configure>", self._on_preview_resize)
+        self.preview_inner.bind("<Configure>", self._on_preview_resize)
 
         # ── Settings Card ──────────────────────────────────────
         settings = self._card(outer)
-        self._section_header(settings, "sliders", "DOWNLOAD CONFIGURATION").pack(anchor=tk.W, pady=(0, 10))
+        self._section_header(settings, "sliders", "DOWNLOAD CONFIGURATION").pack(anchor=tk.W, pady=(0, 6))
 
         # Save directory
         path_row = tk.Frame(settings, bg=SURFACE)
-        path_row.pack(fill=tk.X, pady=(0, 8))
+        path_row.pack(fill=tk.X, pady=(0, 6))
         tk.Label(
             path_row, text="Save to", bg=SURFACE, fg=TEXT_MUTED, font=("Helvetica Neue", 11, "bold")
         ).pack(side=tk.LEFT)
         self.save_var = tk.StringVar(value=self.settings["save_path"])
         self.save_entry = ModernEntry(
-            path_row, textvariable=self.save_var, font=("Helvetica Neue", 12), bg=SURFACE
+            path_row, textvariable=self.save_var, font=("Helvetica Neue", 11), bg=SURFACE
         )
-        self.save_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=10)
+        self.save_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=8)
         self.browse_btn = ModernButton(
             path_row,
             text="Browse",
@@ -351,7 +344,7 @@ class App(tk.Tk):
 
         # Options switches / checkboxes
         opts = tk.Frame(settings, bg=SURFACE)
-        opts.pack(fill=tk.X, pady=(4, 10))
+        opts.pack(fill=tk.X, pady=(2, 6))
 
         self.audio_only_var = tk.BooleanVar(value=self.settings["audio_only"])
         self.audio_chk = ModernCheckbutton(
@@ -361,7 +354,7 @@ class App(tk.Tk):
             command=self._toggle_mode,
             bg=SURFACE,
         )
-        self.audio_chk.pack(side=tk.LEFT, padx=(0, 20))
+        self.audio_chk.pack(side=tk.LEFT, padx=(0, 16))
 
         self.skip_var = tk.BooleanVar(value=self.settings["skip_existing"])
         self.skip_chk = ModernCheckbutton(
@@ -370,7 +363,7 @@ class App(tk.Tk):
             variable=self.skip_var,
             bg=SURFACE,
         )
-        self.skip_chk.pack(side=tk.LEFT, padx=(0, 20))
+        self.skip_chk.pack(side=tk.LEFT, padx=(0, 16))
 
         self.subdir_var = tk.BooleanVar(value=self.settings["playlist_subdir"])
         self.subdir_chk = ModernCheckbutton(
@@ -383,13 +376,13 @@ class App(tk.Tk):
 
         # Format & Quality Selects Row
         fmt_row = tk.Frame(settings, bg=SURFACE)
-        fmt_row.pack(fill=tk.X, pady=(0, 10))
+        fmt_row.pack(fill=tk.X, pady=(0, 6))
 
         def _field(parent, label: str) -> tk.Frame:
             col = tk.Frame(parent, bg=SURFACE)
-            col.pack(side=tk.LEFT, padx=(0, 24))
-            tk.Label(col, text=label, bg=SURFACE, fg=TEXT_MUTED, font=("Helvetica Neue", 11, "bold")).pack(
-                anchor=tk.W, pady=(0, 4)
+            col.pack(side=tk.LEFT, padx=(0, 18))
+            tk.Label(col, text=label, bg=SURFACE, fg=TEXT_MUTED, font=("Helvetica Neue", 10, "bold")).pack(
+                anchor=tk.W, pady=(0, 2)
             )
             return col
 
@@ -433,7 +426,7 @@ class App(tk.Tk):
 
         # Subset / Index range
         subset_row = tk.Frame(settings, bg=SURFACE)
-        subset_row.pack(fill=tk.X, pady=(4, 0))
+        subset_row.pack(fill=tk.X, pady=(2, 0))
 
         self.subset_var = tk.BooleanVar(value=self.settings["subset_enabled"])
         self.subset_chk = ModernCheckbutton(
@@ -442,32 +435,32 @@ class App(tk.Tk):
             variable=self.subset_var,
             bg=SURFACE,
         )
-        self.subset_chk.pack(side=tk.LEFT, padx=(0, 16))
+        self.subset_chk.pack(side=tk.LEFT, padx=(0, 12))
 
-        tk.Label(subset_row, text="Start", bg=SURFACE, fg=TEXT_MUTED, font=("Helvetica Neue", 11)).pack(
-            side=tk.LEFT, padx=(8, 4)
+        tk.Label(subset_row, text="Start", bg=SURFACE, fg=TEXT_MUTED, font=("Helvetica Neue", 10)).pack(
+            side=tk.LEFT, padx=(6, 4)
         )
         self.start_var = tk.StringVar(value=str(self.settings["subset_start"]))
         self.start_entry = ModernEntry(
             subset_row,
             textvariable=self.start_var,
             width=4,
-            fixed_width=64,
-            font=("Helvetica Neue", 12),
+            fixed_width=58,
+            font=("Helvetica Neue", 11),
             bg=SURFACE,
         )
-        self.start_entry.pack(side=tk.LEFT, padx=(0, 14))
+        self.start_entry.pack(side=tk.LEFT, padx=(0, 10))
 
         tk.Label(
-            subset_row, text="End (0 = all)", bg=SURFACE, fg=TEXT_MUTED, font=("Helvetica Neue", 11)
+            subset_row, text="End (0 = all)", bg=SURFACE, fg=TEXT_MUTED, font=("Helvetica Neue", 10)
         ).pack(side=tk.LEFT, padx=(0, 4))
         self.end_var = tk.StringVar(value=str(self.settings["subset_end"]))
         self.end_entry = ModernEntry(
             subset_row,
             textvariable=self.end_var,
             width=4,
-            fixed_width=64,
-            font=("Helvetica Neue", 12),
+            fixed_width=58,
+            font=("Helvetica Neue", 11),
             bg=SURFACE,
         )
         self.end_entry.pack(side=tk.LEFT)
@@ -476,7 +469,7 @@ class App(tk.Tk):
 
         # ── Action Buttons ─────────────────────────────────────
         actions = ttk.Frame(outer)
-        actions.pack(fill=tk.X, pady=(4, 10))
+        actions.pack(fill=tk.X, pady=(4, 6))
 
         self.download_btn = ModernButton(
             actions,
@@ -484,8 +477,8 @@ class App(tk.Tk):
             icon=self._icons["download"],
             command=self.start_download,
             variant="primary",
-            padx=20,
-            pady=10,
+            padx=18,
+            pady=8,
             bg=BG,
         )
         self.download_btn.pack(side=tk.LEFT)
@@ -496,12 +489,12 @@ class App(tk.Tk):
             icon=self._icons["cancel"],
             command=self.cancel_download,
             variant="danger",
-            padx=16,
-            pady=10,
+            padx=14,
+            pady=8,
             bg=BG,
         )
         self.cancel_btn.configure(state=tk.DISABLED)
-        self.cancel_btn.pack(side=tk.LEFT, padx=12)
+        self.cancel_btn.pack(side=tk.LEFT, padx=10)
 
         self.open_btn = ModernButton(
             actions,
@@ -509,13 +502,13 @@ class App(tk.Tk):
             icon=self._icons["folder_open"],
             command=self._open_folder,
             variant="ghost",
-            padx=16,
-            pady=10,
+            padx=14,
+            pady=8,
             bg=BG,
         )
         self.open_btn.pack(side=tk.LEFT)
 
-        # ── Progress & Output Card ─────────────────────────────
+        # ── Progress & Output Card (Always Prominently Visible) ────────
         prog_shell = tk.Frame(outer, bg=BORDER, highlightthickness=0, bd=0)
         prog_shell.pack(fill=tk.BOTH, expand=True)
 
@@ -523,10 +516,10 @@ class App(tk.Tk):
         prog_inner.pack(fill=tk.BOTH, expand=True, padx=1, pady=1)
 
         prog = tk.Frame(prog_inner, bg=SURFACE, highlightthickness=0, bd=0)
-        prog.pack(fill=tk.BOTH, expand=True, padx=16, pady=14)
+        prog.pack(fill=tk.BOTH, expand=True, padx=14, pady=10)
 
         prog_head = tk.Frame(prog, bg=SURFACE)
-        prog_head.pack(fill=tk.X, pady=(0, 8))
+        prog_head.pack(fill=tk.X, pady=(0, 4))
         self._section_header(prog_head, "activity", "PROGRESS & LOGS").pack(side=tk.LEFT)
 
         clear_log_btn = ModernButton(
@@ -535,8 +528,8 @@ class App(tk.Tk):
             icon=self._icons["clear"],
             command=self._clear_log,
             variant="ghost",
-            padx=10,
-            pady=4,
+            padx=8,
+            pady=3,
             bg=SURFACE,
         )
         clear_log_btn.pack(side=tk.RIGHT)
@@ -547,12 +540,12 @@ class App(tk.Tk):
             textvariable=self.status_var,
             bg=SURFACE,
             fg=TEXT,
-            font=("Helvetica Neue", 12, "bold"),
+            font=("Helvetica Neue", 11, "bold"),
             anchor="w",
         ).pack(anchor=tk.W)
 
         self.progress = ttk.Progressbar(prog, mode="determinate", maximum=100)
-        self.progress.pack(fill=tk.X, pady=(6, 4))
+        self.progress.pack(fill=tk.X, pady=(4, 2))
 
         self.speed_var = tk.StringVar(value="")
         tk.Label(
@@ -560,30 +553,37 @@ class App(tk.Tk):
             textvariable=self.speed_var,
             bg=SURFACE,
             fg=TEXT_MUTED,
-            font=("Helvetica Neue", 11),
+            font=("Helvetica Neue", 10),
             anchor="w",
         ).pack(anchor=tk.W)
 
         log_wrap = tk.Frame(prog, bg="#0F172A", padx=1, pady=1)
-        log_wrap.pack(fill=tk.BOTH, expand=True, pady=(8, 0))
+        log_wrap.pack(fill=tk.BOTH, expand=True, pady=(6, 0))
 
         self.log = tk.Text(
             log_wrap,
-            height=6,
+            height=5,
             wrap=tk.WORD,
-            font=("Menlo", 11),
+            font=("Menlo", 10),
             bg="#0F172A",
             fg="#E2E8F0",
             insertbackground="#E2E8F0",
             relief=tk.FLAT,
-            padx=12,
-            pady=10,
+            padx=10,
+            pady=8,
             highlightthickness=0,
         )
         self.log.pack(fill=tk.BOTH, expand=True)
         self.log.configure(state=tk.DISABLED)
 
         self.protocol("WM_DELETE_WINDOW", self._on_close)
+
+    def _on_preview_resize(self, event) -> None:
+        width = event.width
+        if hasattr(self, "info_title"):
+            self.info_title.configure(wraplength=max(200, width - 160))
+        if hasattr(self, "info_meta"):
+            self.info_meta.configure(wraplength=max(200, width - 160))
 
     def _toggle_mode(self) -> None:
         audio = self.audio_only_var.get()
@@ -635,93 +635,6 @@ class App(tk.Tk):
         self.cancel_btn.configure(state=tk.NORMAL if busy else tk.DISABLED)
         self.fetch_btn.configure(state=tk.DISABLED if busy else tk.NORMAL)
 
-    # ── preview / thumbnail ───────────────────────────────────
-    def _on_preview_resize(self, event=None) -> None:
-        width = event.width if event is not None else self.preview_box.winfo_width()
-        # Text column is ~75%; leave a little margin for padding.
-        wrap = max(180, int(width * 0.72) - 24)
-        self.info_title.configure(wraplength=wrap)
-        self.info_meta.configure(wraplength=wrap)
-        thumb_w = max(120, int(width * 0.25) - 8)
-        thumb_h = max(68, int(thumb_w * 9 / 16))
-        self.thumb_frame.configure(width=thumb_w, height=thumb_h)
-
-    def _clear_thumbnail(self, placeholder: str = "No preview") -> None:
-        self._thumb_token += 1
-        self._thumb_photo = None
-        self.thumb_label.configure(
-            image=self._icons["play"],
-            text=placeholder,
-            compound=tk.TOP,
-            fg=TEXT_MUTED,
-            bg="#E2E8F0",
-        )
-
-    def _set_thumbnail_photo(self, photo: ImageTk.PhotoImage | None, token: int) -> None:
-        if token != self._thumb_token:
-            return
-        if photo is None:
-            self._clear_thumbnail("Unavailable")
-            return
-        self._thumb_photo = photo
-        self.thumb_label.configure(image=photo, text="", compound=tk.CENTER, bg="#F8FAFC")
-
-    @staticmethod
-    def _download_thumbnail_image(url: str, max_w: int, max_h: int) -> Image.Image | None:
-        if not url:
-            return None
-        req = urllib.request.Request(
-            url,
-            headers={"User-Agent": "Mozilla/5.0 (compatible; YTPlaylistDownloader/1.0)"},
-        )
-        context = None
-        if certifi is not None:
-            import ssl
-
-            context = ssl.create_default_context(cafile=certifi.where())
-        with urllib.request.urlopen(req, timeout=12, context=context) as resp:
-            data = resp.read()
-        img = Image.open(BytesIO(data)).convert("RGBA")
-        img.thumbnail((max_w, max_h), Image.Resampling.LANCZOS)
-        # Soft rounded corners to match the rest of the UI.
-        radius = 8
-        mask = Image.new("L", img.size, 0)
-        draw = ImageDraw.Draw(mask)
-        draw.rounded_rectangle((0, 0, img.size[0] - 1, img.size[1] - 1), radius=radius, fill=255)
-        img.putalpha(mask)
-        return img
-
-    def _load_thumbnail_async(self, url: str) -> None:
-        self._thumb_token += 1
-        token = self._thumb_token
-        if not url:
-            self._clear_thumbnail("No preview")
-            return
-
-        self.thumb_label.configure(
-            image=self._icons["play"],
-            text="Loading…",
-            compound=tk.TOP,
-            fg=TEXT_MUTED,
-            bg="#E2E8F0",
-        )
-
-        def work() -> None:
-            try:
-                # Size for the 25% column (~168×94 default; scales with window).
-                w = max(120, self.thumb_frame.winfo_width() or 168)
-                h = max(68, self.thumb_frame.winfo_height() or 94)
-                pil = self._download_thumbnail_image(url, w * 2, h * 2)
-                if pil is None:
-                    self.after(0, lambda: self._set_thumbnail_photo(None, token))
-                    return
-                photo = ImageTk.PhotoImage(pil, master=self)
-                self.after(0, lambda p=photo: self._set_thumbnail_photo(p, token))
-            except (urllib.error.URLError, urllib.error.HTTPError, OSError, ValueError):
-                self.after(0, lambda: self._set_thumbnail_photo(None, token))
-
-        threading.Thread(target=work, daemon=True).start()
-
     # ── fetch ─────────────────────────────────────────────────
     def fetch_metadata(self) -> None:
         url = self.url_var.get().strip()
@@ -734,7 +647,6 @@ class App(tk.Tk):
         self.status_var.set("Fetching info…")
         self.info_title.configure(text="Loading metadata from YouTube…", fg=TEXT)
         self.info_meta.configure(text="")
-        self._clear_thumbnail("Loading…")
         self._append_log(f"Fetching: {url}")
 
         def work() -> None:
@@ -748,6 +660,37 @@ class App(tk.Tk):
 
         threading.Thread(target=work, daemon=True).start()
 
+    def _load_remote_thumb(self, url: str) -> None:
+        """Fetch remote thumbnail and update thumbnail box asynchronously."""
+        if not url:
+            return
+
+        def fetch_img() -> None:
+            try:
+                import urllib.request
+                from io import BytesIO
+                from PIL import Image, ImageTk
+
+                req = urllib.request.Request(
+                    url, headers={"User-Agent": "Mozilla/5.0"}
+                )
+                with urllib.request.urlopen(req, timeout=5) as resp:
+                    raw_data = resp.read()
+
+                img = Image.open(BytesIO(raw_data))
+                img.thumbnail((120, 68), Image.Resampling.LANCZOS)
+                photo_img = ImageTk.PhotoImage(img)
+
+                def update_ui() -> None:
+                    self._thumb_photo = photo_img
+                    self.thumb_label.configure(image=self._thumb_photo, text="", compound=tk.CENTER)
+
+                self.after(0, update_ui)
+            except Exception:  # noqa: BLE001
+                pass
+
+        threading.Thread(target=fetch_img, daemon=True).start()
+
     def _on_info(self, summary: dict) -> None:
         self._info = summary
         self.info_title.configure(text=summary["title"], fg=TEXT)
@@ -758,15 +701,19 @@ class App(tk.Tk):
         if summary.get("view_count"):
             extra += f"  •  {summary['view_count']:,} views"
         self.info_meta.configure(text=extra)
-        self._load_thumbnail_async(summary.get("thumbnail") or "")
         self.status_var.set("Ready to download")
         self._append_log(f"Found: {summary['title']} ({summary['count']} items)")
+
+        # Show thumbnail frame and start background thumbnail load
+        self.thumb_col.grid(row=0, column=1, sticky="nse")
+        thumb_url = summary.get("thumbnail")
+        if thumb_url:
+            self._load_remote_thumb(thumb_url)
 
     def _on_info_error(self, err: str) -> None:
         self._info = None
         self.info_title.configure(text="Could not load URL metadata", fg=DANGER)
         self.info_meta.configure(text=err)
-        self._clear_thumbnail("No preview")
         self.status_var.set("Error fetching metadata")
         self._append_log(f"Error: {err}")
         messagebox.showerror("Fetch failed", err)
