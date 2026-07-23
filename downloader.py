@@ -147,11 +147,7 @@ def summarize_info(info: dict[str, Any]) -> dict[str, Any]:
         videos = [e for e in entries if e]
         title = info.get("title") or info.get("uploader") or "Playlist / Channel"
         uploader = info.get("uploader") or info.get("channel") or ""
-        thumb = ""
-        if videos:
-            vid = videos[0].get("id") or ""
-            if vid:
-                thumb = f"https://img.youtube.com/vi/{vid}/hqdefault.jpg"
+        thumb = _first_thumbnail(info, videos)
         return {
             "kind": "playlist",
             "title": title,
@@ -167,11 +163,40 @@ def summarize_info(info: dict[str, Any]) -> dict[str, Any]:
         "title": info.get("title") or "Video",
         "uploader": info.get("uploader") or info.get("channel") or "",
         "count": 1,
-        "thumbnail": f"https://img.youtube.com/vi/{video_id}/hqdefault.jpg" if video_id else "",
+        "thumbnail": _first_thumbnail(info, [info]) or (
+            f"https://i.ytimg.com/vi/{video_id}/mqdefault.jpg" if video_id else ""
+        ),
         "entries": [info],
         "duration": info.get("duration"),
         "view_count": info.get("view_count"),
     }
+
+
+def _thumb_from_entry(entry: dict[str, Any] | None) -> str:
+    if not entry:
+        return ""
+    url = entry.get("thumbnail") or ""
+    if url:
+        return str(url)
+    thumbs = entry.get("thumbnails") or []
+    if thumbs:
+        # Prefer a mid-size thumb (faster + sharp enough for the preview).
+        best = max(thumbs, key=lambda t: t.get("width") or t.get("height") or 0)
+        if best.get("url"):
+            return str(best["url"])
+    vid = entry.get("id") or ""
+    if vid and not str(vid).startswith("http"):
+        return f"https://i.ytimg.com/vi/{vid}/mqdefault.jpg"
+    return ""
+
+
+def _first_thumbnail(info: dict[str, Any], videos: list) -> str:
+    """Thumbnail for the first video, falling back to playlist/channel art."""
+    if videos:
+        thumb = _thumb_from_entry(videos[0])
+        if thumb:
+            return thumb
+    return _thumb_from_entry(info)
 
 
 class DownloadCancelled(Exception):
