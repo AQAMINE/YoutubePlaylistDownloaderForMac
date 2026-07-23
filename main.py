@@ -9,6 +9,9 @@ import subprocess
 import sys
 import threading
 import tkinter as tk
+import urllib.error
+import urllib.request
+from io import BytesIO
 from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 
@@ -19,7 +22,9 @@ try:
     os.environ.setdefault("SSL_CERT_FILE", certifi.where())
     os.environ.setdefault("REQUESTS_CA_BUNDLE", certifi.where())
 except ImportError:
-    pass
+    certifi = None  # type: ignore[assignment]
+
+from PIL import Image, ImageDraw, ImageTk
 
 from downloader import (
     AUDIO_FORMATS,
@@ -75,6 +80,8 @@ class App(tk.Tk):
         self._downloader: Downloader | None = None
         self._busy = False
         self._icons: dict[str, tk.PhotoImage] = {}
+        self._thumb_photo: ImageTk.PhotoImage | None = None
+        self._thumb_token = 0
 
         self._load_icons()
         self._build_style()
@@ -251,35 +258,71 @@ class App(tk.Tk):
         )
         self.fetch_btn.pack(side=tk.LEFT)
 
-        # Metadata preview container
-        self.preview_box = tk.Frame(url_card, bg="#F8FAFC", highlightthickness=1, highlightbackground=BORDER)
+        # Metadata preview: ~75% info text · ~25% first-video thumbnail
+        self.preview_box = tk.Frame(
+            url_card, bg="#F8FAFC", highlightthickness=1, highlightbackground=BORDER
+        )
         self.preview_box.pack(fill=tk.X, pady=(10, 0))
-        
+
         preview_inner = tk.Frame(self.preview_box, bg="#F8FAFC", padx=12, pady=10)
         preview_inner.pack(fill=tk.X)
+        preview_inner.columnconfigure(0, weight=3, uniform="preview")
+        preview_inner.columnconfigure(1, weight=1, uniform="preview")
+
+        text_col = tk.Frame(preview_inner, bg="#F8FAFC")
+        text_col.grid(row=0, column=0, sticky="nsew", padx=(0, 12))
 
         self.info_title = tk.Label(
-            preview_inner,
+            text_col,
             text="Paste a YouTube URL above and click Fetch Info to start",
             bg="#F8FAFC",
             fg=TEXT_MUTED,
             font=("Helvetica Neue", 12, "bold"),
             anchor="w",
             justify="left",
-            wraplength=760,
+            wraplength=520,
         )
-        self.info_title.pack(anchor=tk.W)
+        self.info_title.pack(anchor=tk.W, fill=tk.X)
 
         self.info_meta = tk.Label(
-            preview_inner,
+            text_col,
             text="",
             bg="#F8FAFC",
             fg=TEXT_MUTED,
             font=("Helvetica Neue", 11),
             anchor="w",
             justify="left",
+            wraplength=520,
         )
-        self.info_meta.pack(anchor=tk.W, pady=(4, 0))
+        self.info_meta.pack(anchor=tk.W, fill=tk.X, pady=(4, 0))
+
+        thumb_col = tk.Frame(preview_inner, bg="#F8FAFC")
+        thumb_col.grid(row=0, column=1, sticky="nse")
+
+        self.thumb_frame = tk.Frame(
+            thumb_col,
+            bg="#E2E8F0",
+            width=168,
+            height=94,
+            highlightthickness=1,
+            highlightbackground=BORDER,
+        )
+        self.thumb_frame.pack(anchor=tk.E)
+        self.thumb_frame.pack_propagate(False)
+
+        self.thumb_label = tk.Label(
+            self.thumb_frame,
+            text="No preview",
+            image=self._icons["play"],
+            compound=tk.TOP,
+            bg="#E2E8F0",
+            fg=TEXT_MUTED,
+            font=("Helvetica Neue", 9),
+            bd=0,
+        )
+        self.thumb_label.pack(expand=True, fill=tk.BOTH)
+
+        preview_inner.bind("<Configure>", self._on_preview_resize)
 
         # ── Settings Card ──────────────────────────────────────
         settings = self._card(outer)
@@ -592,6 +635,93 @@ class App(tk.Tk):
         self.cancel_btn.configure(state=tk.NORMAL if busy else tk.DISABLED)
         self.fetch_btn.configure(state=tk.DISABLED if busy else tk.NORMAL)
 
+    # ── preview / thumbnail ───────────────────────────────────
+    def _on_preview_resize(self, event=None) -> None:
+        width = event.width if event is not None else self.preview_box.winfo_width()
+        # Text column is ~75%; leave a little margin for padding.
+        wrap = max(180, int(width * 0.72) - 24)
+        self.info_title.configure(wraplength=wrap)
+        self.info_meta.configure(wraplength=wrap)
+        thumb_w = max(120, int(width * 0.25) - 8)
+        thumb_h = max(68, int(thumb_w * 9 / 16))
+        self.thumb_frame.configure(width=thumb_w, height=thumb_h)
+
+    def _clear_thumbnail(self, placeholder: str = "No preview") -> None:
+        self._thumb_token += 1
+        self._thumb_photo = None
+        self.thumb_label.configure(
+            image=self._icons["play"],
+            text=placeholder,
+            compound=tk.TOP,
+            fg=TEXT_MUTED,
+            bg="#E2E8F0",
+        )
+
+    def _set_thumbnail_photo(self, photo: ImageTk.PhotoImage | None, token: int) -> None:
+        if token != self._thumb_token:
+            return
+        if photo is None:
+            self._clear_thumbnail("Unavailable")
+            return
+        self._thumb_photo = photo
+        self.thumb_label.configure(image=photo, text="", compound=tk.CENTER, bg="#F8FAFC")
+
+    @staticmethod
+    def _download_thumbnail_image(url: str, max_w: int, max_h: int) -> Image.Image | None:
+        if not url:
+            return None
+        req = urllib.request.Request(
+            url,
+            headers={"User-Agent": "Mozilla/5.0 (compatible; YTPlaylistDownloader/1.0)"},
+        )
+        context = None
+        if certifi is not None:
+            import ssl
+
+            context = ssl.create_default_context(cafile=certifi.where())
+        with urllib.request.urlopen(req, timeout=12, context=context) as resp:
+            data = resp.read()
+        img = Image.open(BytesIO(data)).convert("RGBA")
+        img.thumbnail((max_w, max_h), Image.Resampling.LANCZOS)
+        # Soft rounded corners to match the rest of the UI.
+        radius = 8
+        mask = Image.new("L", img.size, 0)
+        draw = ImageDraw.Draw(mask)
+        draw.rounded_rectangle((0, 0, img.size[0] - 1, img.size[1] - 1), radius=radius, fill=255)
+        img.putalpha(mask)
+        return img
+
+    def _load_thumbnail_async(self, url: str) -> None:
+        self._thumb_token += 1
+        token = self._thumb_token
+        if not url:
+            self._clear_thumbnail("No preview")
+            return
+
+        self.thumb_label.configure(
+            image=self._icons["play"],
+            text="Loading…",
+            compound=tk.TOP,
+            fg=TEXT_MUTED,
+            bg="#E2E8F0",
+        )
+
+        def work() -> None:
+            try:
+                # Size for the 25% column (~168×94 default; scales with window).
+                w = max(120, self.thumb_frame.winfo_width() or 168)
+                h = max(68, self.thumb_frame.winfo_height() or 94)
+                pil = self._download_thumbnail_image(url, w * 2, h * 2)
+                if pil is None:
+                    self.after(0, lambda: self._set_thumbnail_photo(None, token))
+                    return
+                photo = ImageTk.PhotoImage(pil, master=self)
+                self.after(0, lambda p=photo: self._set_thumbnail_photo(p, token))
+            except (urllib.error.URLError, urllib.error.HTTPError, OSError, ValueError):
+                self.after(0, lambda: self._set_thumbnail_photo(None, token))
+
+        threading.Thread(target=work, daemon=True).start()
+
     # ── fetch ─────────────────────────────────────────────────
     def fetch_metadata(self) -> None:
         url = self.url_var.get().strip()
@@ -604,6 +734,7 @@ class App(tk.Tk):
         self.status_var.set("Fetching info…")
         self.info_title.configure(text="Loading metadata from YouTube…", fg=TEXT)
         self.info_meta.configure(text="")
+        self._clear_thumbnail("Loading…")
         self._append_log(f"Fetching: {url}")
 
         def work() -> None:
@@ -627,6 +758,7 @@ class App(tk.Tk):
         if summary.get("view_count"):
             extra += f"  •  {summary['view_count']:,} views"
         self.info_meta.configure(text=extra)
+        self._load_thumbnail_async(summary.get("thumbnail") or "")
         self.status_var.set("Ready to download")
         self._append_log(f"Found: {summary['title']} ({summary['count']} items)")
 
@@ -634,6 +766,7 @@ class App(tk.Tk):
         self._info = None
         self.info_title.configure(text="Could not load URL metadata", fg=DANGER)
         self.info_meta.configure(text=err)
+        self._clear_thumbnail("No preview")
         self.status_var.set("Error fetching metadata")
         self._append_log(f"Error: {err}")
         messagebox.showerror("Fetch failed", err)
