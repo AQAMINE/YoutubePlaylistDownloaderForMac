@@ -34,7 +34,17 @@ from downloader import (
 from icons import ACCENT, DANGER, INK, MUTED, OK, photo
 from widgets import ModernButton, ModernCheckbutton, ModernEntry, ModernSelect
 
-APP_DIR = Path(__file__).resolve().parent
+
+def _app_dir() -> Path:
+    """Project folder when running from source; user support dir when frozen."""
+    if getattr(sys, "frozen", False):
+        support = Path.home() / "Library" / "Application Support" / "YouTubePlaylistDownloader"
+        support.mkdir(parents=True, exist_ok=True)
+        return support
+    return Path(__file__).resolve().parent
+
+
+APP_DIR = _app_dir()
 SETTINGS_PATH = APP_DIR / "settings.json"
 DEFAULT_SAVE = Path.home() / "Downloads" / "YouTubeDownloads"
 
@@ -842,8 +852,12 @@ def main() -> None:
         import yt_dlp  # noqa: F401
         from PIL import Image  # noqa: F401
     except ImportError:
-        print("Missing dependency. Run:")
-        print(f'  pip3 install -r "{APP_DIR / "requirements.txt"}"')
+        if getattr(sys, "frozen", False):
+            print("Missing bundled dependency. Rebuild with ./build_macos_app.sh")
+        else:
+            root = Path(__file__).resolve().parent
+            print("Missing dependency. Run:")
+            print(f'  pip3 install -r "{root / "requirements.txt"}"')
         sys.exit(1)
 
     app = App()

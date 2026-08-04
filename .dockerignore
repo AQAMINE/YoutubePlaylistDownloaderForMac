@@ -1,0 +1,56 @@
+# Git / IDE
+.git
+.github
+.gitattributes
+.gitignore
+.cursor
+.cursorignore
+.vscode
+.idea
+
+# Local Python env
+.venv
+venv
+env
+__pycache__
+*.py[cod]
+*$py.class
+*.egg-info
+.eggs
+*.egg
+
+# Build / packaging artifacts
+build
+dist
+*.spec
+*.manifest
+
+# macOS / OS junk
+.DS_Store
+**/.DS_Store
+Thumbs.db
+
+# Local launcher / app build helpers (not needed in image)
+Run YouTube Playlist Downloader.command
+build_macos_app.sh
+
+# Local user settings & downloads (use volume mounts instead)
+settings.json
+downloads
+
+# Docs / license (optional in runtime image)
+README.md
+LICENSE
+
+# Logs / temp
+*.log
+tmp
+.cache
+.pytest_cache
+.mypy_cache
+.ruff_cache
+
+# Nested / leftover project trees (if present)
+python version
+YoutubePlaylistDownloader
+YPDSetup

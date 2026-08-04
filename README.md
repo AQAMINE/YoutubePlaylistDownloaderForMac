@@ -14,10 +14,27 @@ FFmpeg is included via `imageio-ffmpeg` (needed to merge video + audio).
 
 ## Run
 
+**Easiest (macOS):** double-click  
+`Run YouTube Playlist Downloader.command`
+
+Or from a terminal:
+
 ```bash
 source .venv/bin/activate
 python main.py
 ```
+
+### Standalone macOS app
+
+Build a double-clickable `.app` (no Terminal needed after build):
+
+```bash
+./build_macos_app.sh
+open "dist/YouTube Playlist Downloader.app"
+```
+
+You can drag `dist/YouTube Playlist Downloader.app` to Applications or the Desktop.  
+Settings are stored in `~/Library/Application Support/YouTubePlaylistDownloader/`.
 
 ## Features
 
